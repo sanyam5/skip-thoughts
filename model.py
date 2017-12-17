@@ -5,6 +5,7 @@ from torch.autograd import Variable
 import math
 from config import *
 import random
+import numpy as np
 
 
 class Packer:
@@ -33,14 +34,15 @@ class Packer:
         return original
 
     @staticmethod
-    def _pad(ordered, maxwords = 32):
-        assert maxwords > MAXLEN
+    def _pad(ordered):
+        maxwords = MAXLEN + 1
         lengths = [len(sent) for sent in ordered]
 
         zero_pad = Variable(torch.zeros((maxwords))).long()
         if USE_CUDA is not None:
             gpu_device = ordered[0].get_device()
             zero_pad = zero_pad.cuda(gpu_device)
+            
 
         padded = []
         for sent in ordered:
@@ -49,6 +51,7 @@ class Packer:
             padded.append(torch.cat([sent, zero_pad])[:-num_words])
 
         padded = torch.stack(padded)  # (G*B, maxwords)
+        padded = padded[:, :MAXLEN]   # (G*B, maxlen)
 
         return padded, lengths
 
@@ -89,7 +92,6 @@ class Encoder(nn.Module):
         # sentences = (batch_size, maxlen)
 
         word_embeddings = F.tanh(self.word2embd(sentences))  # (batch, maxlen, word_size)
-
         packed = torch.nn.utils.rnn.pack_padded_sequence(word_embeddings, lengths=lengths, batch_first=True)
         _, (thoughts, _) = self.lstm(packed)
         thoughts = thoughts[-1]  # (batch, thought_size)
@@ -105,7 +107,7 @@ class DuoDecoder(nn.Module):
         super().__init__()
         self.prev_lstm = nn.LSTM(Encoder.thought_size + self.word_size, self.word_size)
         self.next_lstm = nn.LSTM(Encoder.thought_size + self.word_size, self.word_size)
-        self.worder = nn.Linear(Encoder.thought_size, self.word_size)
+        self.worder = nn.Linear(self.word_size, VOCAB_SIZE)
 
     def forward(self, thoughts, word_embeddings):
         # thoughts = (batch_size, Encoder.thought_size)
@@ -124,20 +126,20 @@ class DuoDecoder(nn.Module):
         prev_word_embeddings = word_embeddings[:, :-1, :]  # (maxlen, batch-1, word_size)
         next_word_embeddings = word_embeddings[:, 1:, :]  # (maxlen, batch-1, word_size)
         # delay the embeddings by one timestep
-        delayed_prev_word_embeddings = torch.cat([0 * prev_word_embeddings[-1, :, :], prev_word_embeddings[:-1, :, :]])
-        delayed_next_word_embeddings = torch.cat([0 * next_word_embeddings[-1, :, :], next_word_embeddings[:-1, :, :]])
+        delayed_prev_word_embeddings = torch.cat([0 * prev_word_embeddings[-1:, :, :], prev_word_embeddings[:-1, :, :]])
+        delayed_next_word_embeddings = torch.cat([0 * next_word_embeddings[-1:, :, :], next_word_embeddings[:-1, :, :]])
 
         prev_pred_embds, _ = self.prev_lstm(torch.cat([next_thoughts, delayed_prev_word_embeddings], dim=2))  # (maxlen, batch-1, embd_size)
         next_pred_embds, _ = self.prev_lstm(torch.cat([prev_thoughts, delayed_next_word_embeddings], dim=2))  # (maxlen, batch-1, embd_size)
 
         # predict actual words
         a, b, c = prev_pred_embds.size()
-        prev_pred = self.worder(prev_pred_embds.view(a*b, c)).view(a, b, c)  # (maxlen, batch-1, VOCAB_SIZE)
-        a, b, c = next_word_embeddings.size()
-        next_pred = self.worder(next_pred_embds.view(a*b, c)).view(a, b, c)  # (maxlen, batch-1, VOCAB_SIZE)
+        prev_pred = self.worder(prev_pred_embds.view(a*b, c)).view(a, b, -1)  # (maxlen, batch-1, VOCAB_SIZE)
+        a, b, c = next_pred_embds.size()
+        next_pred = self.worder(next_pred_embds.view(a*b, c)).view(a, b, -1)  # (maxlen, batch-1, VOCAB_SIZE)
 
-        prev_pred = prev_pred.transpose(0, 1)  # (batch-1, maxlen, VOCAB_SIZE)
-        next_pred = next_pred.transpose(0, 1)  # (batch-1, maxlen, VOCAB_SIZE)
+        prev_pred = prev_pred.transpose(0, 1).contiguous()  # (batch-1, maxlen, VOCAB_SIZE)
+        next_pred = next_pred.transpose(0, 1).contiguous()  # (batch-1, maxlen, VOCAB_SIZE)
 
         return prev_pred, next_pred
 
@@ -151,11 +153,11 @@ class UniSkip(nn.Module):
 
     def create_mask(self, var, lengths):
         mask = var.data.new().resize_as_(var.data).fill_(0)
-
+        lengths = lengths.data.numpy()
         for i, l in enumerate(lengths):
             for j in range(l):
                 mask[i, j] = 1
-        return mask
+        return Variable(mask).cuda(var.get_device())
 
     def forward(self, sentence_groups):
         # sentences = G * [B * [1 to maxlen]]]
@@ -167,23 +169,30 @@ class UniSkip(nn.Module):
 
         thoughts = torch.stack(Packer.back_order(thoughts, order)).view(group_size, batch_size, Encoder.thought_size)  # (G, B, thought_size)
         word_embeddings = torch.stack(Packer.back_order(word_embeddings, order)).view(group_size, batch_size, MAXLEN, Encoder.word_size)  # (G, B, maxlen, word_size)
+        
+        deranged_lengths = Variable(torch.from_numpy(np.array(deranged_lengths))).long()
         lengths = torch.stack(Packer.back_order(deranged_lengths, order)).view(group_size, batch_size)  # (G, B)
 
         for i, batch in enumerate(sentence_groups):
             for j, sent in enumerate(batch):
-                assert lengths[i, j] == len(sent)
+                assert lengths[i, j].data[0] == len(sent)
 
         assert group_size == 1
         thoughts, word_embeddings, lengths = thoughts[0], word_embeddings[0], lengths[0]
         prev_pred, next_pred = self.decoders(thoughts, word_embeddings)  # both = (batch-1, maxlen, VOCAB_SIZE)
+        
+        padded = padded.contiguous()
+        
+        prev_mask = self.create_mask(prev_pred, lengths[:-1])
+        next_mask = self.create_mask(next_pred, lengths[1:])
+        
+        masked_prev_pred = prev_pred * prev_mask
+        masked_next_pred = next_pred * next_mask
+        
+        prev_loss = F.cross_entropy(masked_prev_pred.view(-1, VOCAB_SIZE), padded[:-1, :].view(-1))
+        next_loss = F.cross_entropy(masked_next_pred.view(-1, VOCAB_SIZE), padded[1:, :].view(-1))
 
-        prev_loss = F.cross_entropy(prev_pred.view(-1, VOCAB_SIZE), padded[:-1, :].view(-1), reduce=False).view(batch_size-1, MAXLEN)
-        next_loss = F.cross_entropy(next_pred.view(-1, VOCAB_SIZE), padded[1:, :].view(-1), reduce=False).view(batch_size-1, MAXLEN)
-
-        prev_mask = self.create_mask(prev_loss, lengths[:-1])
-        next_mask = self.create_mask(next_loss, lengths[1:])
-
-        loss = (prev_loss * prev_mask).sum() + (next_loss * next_mask).sum()
+        loss = prev_loss + next_loss
 
         return loss
 

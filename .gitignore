@@ -1,4 +1,6 @@
 # Byte-compiled / optimized / DLL files
+*ipynb
+saved_models/
 .idea/
 __pycache__/
 *.py[cod]

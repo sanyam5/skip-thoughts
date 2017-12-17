@@ -42,9 +42,6 @@ class DataLoader:
                       for w in sentence.split()  # split into words on spaces
                   ][: self.maxlen - 1]  # take only maxlen-1 words per sentence at the most.
 
-        # last words are EOS
-        indices += (self.maxlen - len(indices))
-
         indices = np.array(indices)
         indices = Variable(torch.from_numpy(indices))
         if USE_CUDA:
