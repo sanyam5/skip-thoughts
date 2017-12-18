@@ -193,8 +193,12 @@ class UniSkip(nn.Module):
         next_loss = F.cross_entropy(masked_next_pred.view(-1, VOCAB_SIZE), padded[1:, :].view(-1))
 
         loss = prev_loss + next_loss
+        
+        _, prev_pred_ids = prev_pred[0].max(1)
+        _, next_pred_ids = next_pred[0].max(1)
+        
 
-        return loss
+        return loss, padded[0], padded[1], prev_pred_ids, next_pred_ids
 
 
 
