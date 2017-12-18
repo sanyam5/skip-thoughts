@@ -42,6 +42,9 @@ class DataLoader:
                       for w in sentence.split()  # split into words on spaces
                   ][: self.maxlen - 1]  # take only maxlen-1 words per sentence at the most.
 
+        # last words are EOS
+        indices += [self.EOS] * (self.maxlen - len(indices))
+
         indices = np.array(indices)
         indices = Variable(torch.from_numpy(indices))
         if USE_CUDA:
@@ -71,17 +74,25 @@ class DataLoader:
     def fetch_batch(self, batch_size, group_size):
 
         groups = []
+        lengths = []
 
         for g in range(group_size):
 
             first_index = random.randint(0, len(self.sentences) - batch_size)
             indices = []
+            lens = []
 
             for i in range(first_index, first_index + batch_size):
-                ind = self.convert_sentence_to_indices(self.sentences[i])
+                sent = self.sentences[i]
+                ind = self.convert_sentence_to_indices(sent)
                 indices.append(ind)
+                lens.append(len(sent))
 
             groups.append(indices)
+            lengths.append(lens)
 
-        return groups
+        groups = torch.stack([torch.stack(b) for b in groups])
+        lengths = np.array(lengths)
+
+        return groups, lengths
 
