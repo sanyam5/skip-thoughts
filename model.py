@@ -56,20 +56,16 @@ class DuoDecoder(nn.Module):
 
     def forward(self, thoughts, word_embeddings):
         # thoughts = (batch_size, Encoder.thought_size)
-        # word_embeddings = # (batch, maxlen, word_size)
+        # word_embeddings = # (maxlen, batch, word_size)
 
         batch_size = thoughts.size()[0]
-
-        assert word_embeddings.size()[1] == MAXLEN
-        assert word_embeddings.size()[0] == batch_size
+        
+        assert word_embeddings.size()[0] == MAXLEN
+        assert word_embeddings.size()[1] == batch_size
 
         thoughts = thoughts.repeat(MAXLEN, 1, 1)  # (maxlen, batch, thought_size)
         a, b, c = thoughts.size()
         assert a == MAXLEN and b == batch_size and c == Encoder.thought_size
-
-        word_embeddings = word_embeddings.transpose(0, 1)  # (maxlen, batch, word_size)
-
-        assert word_embeddings.size()[1] == batch_size
 
         prev_thoughts = thoughts[:, :-1, :]  # (maxlen, batch-1, thought_size)
         next_thoughts = thoughts[:, 1:, :]   # (maxlen, batch-1, thought_size)
@@ -105,6 +101,7 @@ class UniSkip(nn.Module):
 
     def create_mask(self, var, lengths):
         mask = var.data.new().resize_as_(var.data).fill_(0)
+#         print("lengths", lengths)
         for i, l in enumerate(lengths):
             for j in range(l):
                 mask[i, j] = 1

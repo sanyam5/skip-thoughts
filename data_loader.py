@@ -86,7 +86,7 @@ class DataLoader:
                 sent = self.sentences[i]
                 ind = self.convert_sentence_to_indices(sent)
                 indices.append(ind)
-                lens.append(len(sent))
+                lens.append(min(len(sent.split()), MAXLEN))
 
             groups.append(indices)
             lengths.append(lens)
