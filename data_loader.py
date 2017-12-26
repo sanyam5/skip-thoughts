@@ -61,8 +61,12 @@ class DataLoader:
                 return "EOS"
             elif idx == 1:
                 return "UNK"
-
-            word, idx_ = self.revmap[idx - 2]
+            
+            search_idx = idx - 2
+            if search_idx >= len(self.revmap):
+                return "NA"
+            
+            word, idx_ = self.revmap[search_idx]
 
             assert idx_ == idx
             return word
@@ -71,28 +75,20 @@ class DataLoader:
 
         return " ".join(words)
 
-    def fetch_batch(self, batch_size, group_size):
+    def fetch_batch(self, batch_size):
 
-        groups = []
+        first_index = random.randint(0, len(self.sentences) - batch_size)
+        batch = []
         lengths = []
 
-        for g in range(group_size):
+        for i in range(first_index, first_index + batch_size):
+            sent = self.sentences[i]
+            ind = self.convert_sentence_to_indices(sent)
+            batch.append(ind)
+            lengths.append(min(len(sent.split()), MAXLEN))
 
-            first_index = random.randint(0, len(self.sentences) - batch_size)
-            indices = []
-            lens = []
-
-            for i in range(first_index, first_index + batch_size):
-                sent = self.sentences[i]
-                ind = self.convert_sentence_to_indices(sent)
-                indices.append(ind)
-                lens.append(min(len(sent.split()), MAXLEN))
-
-            groups.append(indices)
-            lengths.append(lens)
-
-        groups = torch.stack([torch.stack(b) for b in groups])
+        batch = torch.stack(batch)
         lengths = np.array(lengths)
 
-        return groups, lengths
+        return batch, lengths
 

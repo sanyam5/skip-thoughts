@@ -107,16 +107,12 @@ class UniSkip(nn.Module):
                 mask[i, j] = 1
         return Variable(mask).cuda(var.get_device())
 
-    def forward(self, sentence_groups, lengths):
-        # sentences = (G, B, maxlen)
-        # lengths = (G, B)
-        group_size, batch_size, _ = sentence_groups.size()
+    def forward(self, sentences, lengths):
+        # sentences = (B, maxlen)
+        # lengths = (B)
+        batch_size, _ = sentences.size()
 
-        assert group_size == 1
-        lengths = lengths[0]
-        sentences = sentence_groups.view(group_size * batch_size, -1)
-
-        thoughts, word_embeddings = self.encoder(sentences)  # thoughts = (G*B, thought_size), word_embeddings = (G*B, maxlen, word_size)
+        thoughts, word_embeddings = self.encoder(sentences)  # thoughts = (B, thought_size), word_embeddings = (B, maxlen, word_size)
 
         prev_pred, next_pred = self.decoders(thoughts, word_embeddings)  # both = (batch-1, maxlen, VOCAB_SIZE)
         
