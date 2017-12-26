@@ -9,3 +9,7 @@ Instructions
 * Download the movie review dataset and put `rt-polarity.neg` and  `rt-polarity.pos` in the `./tasks/mr_data` directory.
 
 Note: There is no early stopping. The `Train` notebook runs at the rate of 1 epoch / 2 days. Your model is saved when `./saved_models` when the average training loss in the last 20 iterations dips below the previous best.
+
+TODO
+-----
+support multi-GPU parallelism
