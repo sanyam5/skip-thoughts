@@ -1,4 +1,6 @@
 """
+This code has been taken and modified from https://github.com/ryankiros/skip-thoughts
+
 Constructing and loading dictionaries
 """
 import _pickle as pkl
