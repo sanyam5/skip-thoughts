@@ -61,8 +61,12 @@ class DataLoader:
                 return "EOS"
             elif idx == 1:
                 return "UNK"
-
-            word, idx_ = self.revmap[idx - 2]
+            
+            search_idx = idx - 2
+            if search_idx >= len(self.revmap):
+                return "NA"
+            
+            word, idx_ = self.revmap[search_idx]
 
             assert idx_ == idx
             return word
@@ -83,7 +87,7 @@ class DataLoader:
             batch.append(ind)
             lengths.append(min(len(sent.split()), MAXLEN))
 
-        groups = torch.stack([s for s in batch])
+        batch = torch.stack(batch)
         lengths = np.array(lengths)
 
-        return groups, lengths
+        return batch, lengths
