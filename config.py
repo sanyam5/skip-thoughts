@@ -1,3 +1,7 @@
+"""
+Configuration file.
+"""
+
 VOCAB_SIZE = 20000
 USE_CUDA = True
 DEVICES = [2]

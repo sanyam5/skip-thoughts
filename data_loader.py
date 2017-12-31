@@ -1,5 +1,8 @@
+""""
+Here we implement a class for loading data.
+"""
+
 import torch
-import torch.utils.data
 from torch.autograd import Variable
 from vocab import *
 from config import *
