@@ -1,6 +1,8 @@
 # skip-thoughts
 An implementation of Skip-Thought Vectors in PyTorch.
-Here's a [blog explaining the subtleties about Skip-Thoughts](http://sanyam5.github.io/my-thoughts-on-skip-thoughts/)
+Here's a [blog explaining the subtleties of Skip-Thoughts](http://sanyam5.github.io/my-thoughts-on-skip-thoughts/)
+![blog](http://sanyam5.github.io/images/skip-thoughts/skip-rnn.png)
+![blog](http://sanyam5.github.io/images/skip-thoughts/impute-rnn.png)
 
 Instructions
 ------------
