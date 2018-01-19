@@ -79,7 +79,7 @@ class DuoDecoder(nn.Module):
 
         # Supply current "thought" and delayed word embeddings for teacher forcing.
         prev_pred_embds, _ = self.prev_lstm(torch.cat([next_thoughts, delayed_prev_word_embeddings], dim=2))  # (maxlen, batch-1, embd_size)
-        next_pred_embds, _ = self.prev_lstm(torch.cat([prev_thoughts, delayed_next_word_embeddings], dim=2))  # (maxlen, batch-1, embd_size)
+        next_pred_embds, _ = self.next_lstm(torch.cat([prev_thoughts, delayed_next_word_embeddings], dim=2))  # (maxlen, batch-1, embd_size)
 
         # predict actual words
         a, b, c = prev_pred_embds.size()
